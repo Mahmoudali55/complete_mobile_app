@@ -8,6 +8,7 @@ import 'package:location/location.dart';
 import 'dart:ui' as ui;
 
 import 'package:mobile_app/models/place_model.dart';
+import 'package:mobile_app/utils/location_service.dart';
 
 class CustomGoogleMap extends StatefulWidget {
   const CustomGoogleMap({super.key});
@@ -19,21 +20,23 @@ class CustomGoogleMap extends StatefulWidget {
 class _CustomGoogleMapState extends State<CustomGoogleMap> {
   late CameraPosition initialCameraPosition;
   GoogleMapController? googleMapController;
-  late Location location;
+
+  late LocationService locationService;
   @override
   void initState() {
     initialCameraPosition = const CameraPosition(
         zoom: 10, target: LatLng(31.03686361532399, 31.393837474529327));
     // initMarkers();
     //initPlylines();
-
+    locationService = LocationService();
     // initPloygons();
-    location = Location();
+
     updateMyLocation();
     //initCircles();
     super.initState();
   }
 
+  bool isFristCall = true;
   Set<Marker> markers = {};
   Set<Polyline> polylines = {};
   Set<Polygon> polygons = {};
@@ -134,57 +137,41 @@ class _CustomGoogleMapState extends State<CustomGoogleMap> {
     circles.add(circle);
   }
 
-  Future<void> checkAndRequestLocationServices() async {
-    var isServiceEnabled = await location.serviceEnabled();
-    if (!isServiceEnabled) {
-      isServiceEnabled = await location.requestService();
-      if (!isServiceEnabled) {}
-    }
-  }
-
-  Future<bool> checkAndRequestLocationPermission() async {
-    var permissionStatus = await location.hasPermission();
-    if (permissionStatus == PermissionStatus.deniedForever) {
-      return false;
-    }
-    if (permissionStatus == PermissionStatus.denied) {
-      permissionStatus = await location.requestPermission();
-      if (permissionStatus != PermissionStatus.granted) {
-        return false;
-      } else {
-        return true;
-      }
-    }
-    return true;
-  }
-
-  void getLoationdata() {
-    location.changeSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 2,
-    );
-    location.onLocationChanged.listen((LocationData) {
-      var cameraPosition = CameraPosition(
-          target: LatLng(LocationData.latitude!, LocationData.longitude!),
-          zoom: 15);
-      var mylocationMarker = Marker(
-        markerId: const MarkerId('mylocation'),
-        position: LatLng(LocationData.latitude!, LocationData.longitude!),
-      );
-      markers.add(mylocationMarker);
-      setState(() {});
-      googleMapController
-          ?.animateCamera(CameraUpdate.newCameraPosition(cameraPosition));
-    });
-  }
-
   void updateMyLocation() async {
-    await checkAndRequestLocationServices();
-    var hasPermission = await checkAndRequestLocationPermission();
+    await locationService.checkAndRequestLocationServices();
+
+    var hasPermission =
+        await locationService.checkAndRequestLocationPermission();
     if (hasPermission) {
-      getLoationdata();
+      locationService.getRealtimeLocationData((LocationData) {
+        CameraPosition cameraPosition = setMycamra(LocationData);
+        setMystatalocation(LocationData);
+        if (isFristCall) {
+          googleMapController
+              ?.animateCamera(CameraUpdate.newCameraPosition(cameraPosition));
+        } else {
+          googleMapController?.animateCamera(CameraUpdate.newLatLng(
+              LatLng(LocationData.latitude!, LocationData.longitude!)));
+        }
+      });
     } else {
       print('no permission');
     }
+  }
+
+  CameraPosition setMycamra(LocationData LocationData) {
+    var cameraPosition = CameraPosition(
+        target: LatLng(LocationData.latitude!, LocationData.longitude!),
+        zoom: 15);
+    return cameraPosition;
+  }
+
+  void setMystatalocation(LocationData LocationData) {
+    var mylocationMarker = Marker(
+      markerId: const MarkerId('mylocation'),
+      position: LatLng(LocationData.latitude!, LocationData.longitude!),
+    );
+    markers.add(mylocationMarker);
+    setState(() {});
   }
 }
